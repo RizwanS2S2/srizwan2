@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Niaz Fashion - Cloud JSON</title>
+    <link href="https://fonts.maateen.me/solaiman-lipi/font.css" rel="stylesheet">
+    <style>
+        body { font-family: 'SolaimanLipi', sans-serif; background: #f4f7f6; margin: 0; padding: 15px; padding-bottom: 120px; }
+        .header { text-align: center; background: #fff; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 15px; }
+        .header h1 { margin: 0; color: #2c3e50; font-size: 22px; }
+        .date-display { font-size: 14px; color: #3498db; margin-top: 5px; font-weight: bold; }
+        .entry-box { background: #fff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 10px; border-left: 5px solid #3498db; position: relative; }
+        .entry-box.out { border-left-color: #95a5a6; opacity: 0.8; }
+        .del-icon { position: absolute; top: 10px; right: 10px; color: #e74c3c; cursor: pointer; font-size: 22px; }
+        .fab { position: fixed; bottom: 85px; right: 20px; width: 60px; height: 60px; background: #3498db; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 35px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.25); border: none; z-index: 100; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.65); justify-content: center; align-items: center; z-index: 200; }
+        .modal-content { background: white; padding: 20px; border-radius: 15px; width: 85%; max-width: 330px; }
+        input, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; font-family: 'SolaimanLipi'; }
+        .btn-save { background: #2ecc71; color: white; border: none; padding: 14px; width: 100%; border-radius: 8px; cursor: pointer; font-size: 18px; }
+        #honor-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: #2c3e50; color: white; padding: 18px; text-align: center; font-size: 20px; font-weight: bold; border-top: 3px solid #3498db; }
+        .loading { text-align: center; color: #3498db; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Niaz Fashion</h1>
+        <p>GitHub JSON Sync System</p>
+        <div class="date-display" id="date"></div>
+        <button onclick="updateGitHub([])" style="color:red; background:none; border:none; cursor:pointer;">সব মুছুন</button>
+    </div>
+
+    <div id="data-list" class="loading">ডাটা লোড হচ্ছে...</div>
+
+    <div id="honor-bar">আজকের সম্মানী: <span id="total-val">0</span> টাকা</div>
+
+    <button class="fab" onclick="document.getElementById('modal').style.display='flex'">+</button>
+
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <h3 style="text-align:center;">নতুন এন্ট্রি</h3>
+            <form id="entryForm">
+                <input type="text" id="p_name" placeholder="পণ্যের নাম" required>
+                <input type="number" id="p_qty" placeholder="সংখ্যা" required>
+                <input type="number" id="p_price" placeholder="দাম" required>
+                <select id="p_type">
+                    <option value="in">In (আয়)</option>
+                    <option value="out">Out (ব্যয়)</option>
+                </select>
+                <button type="submit" class="btn-save" id="saveBtn">সেভ করুন</button>
+                <button type="button" onclick="document.getElementById('modal').style.display='none'" style="width:100%; margin-top:10px; background:none; border:none; color:gray; cursor:pointer;">বাতিল</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // --- আপনার গিটহাব তথ্য এখানে দিন ---
+        const GITHUB_TOKEN = 'YOUR_GITHUB_PERSONAL_ACCESS_TOKEN'; 
+        const REPO_OWNER = 'YOUR_USERNAME';
+        const REPO_NAME = 'YOUR_REPO_NAME';
+        const FILE_PATH = 'data.json';
+        
+        let fileSHA = ""; // ফাইলের আপডেট আইডি
+
+        document.getElementById('date').innerText = "তারিখ: " + new Date().toLocaleDateString('en-GB');
+
+        // ১. গিটহাব থেকে ডাটা পড়া
+        async function loadData() {
+            const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`, {
+                headers: { Authorization: `token ${GITHUB_TOKEN}` }
+            });
+            const file = await res.json();
+            fileSHA = file.sha;
+            const content = JSON.parse(atob(file.content));
+            renderData(content);
+        }
+
+        // ২. ডাটা ডিসপ্লে করা
+        function renderData(data) {
+            let html = '';
+            let total = 0;
+            data.forEach((item, index) => {
+                if(item.type === 'in') total += (item.price * 0.5);
+                html += `
+                    <div class="entry-box ${item.type}">
+                        <span class="del-icon" onclick="deleteEntry(${index})">&times;</span>
+                        <div style="font-weight:bold; color:#3498db;">#${index + 1}</div>
+                        <div><b>পণ্য:</b> ${item.name}</div>
+                        <div><b>সংখ্যা:</b> ${item.qty} | <b>দাম:</b> ${item.price} (${item.type.toUpperCase()})</div>
+                    </div>`;
+            });
+            document.getElementById('data-list').innerHTML = html || 'কোন ডাটা নেই';
+            document.getElementById('total-val').innerText = total;
+        }
+
+        // ৩. গিটহাবে JSON আপডেট করা
+        async function updateGitHub(newData) {
+            document.getElementById('saveBtn').innerText = "সেভিং...";
+            const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`, {
+                method: "PUT",
+                headers: { Authorization: `token ${GITHUB_TOKEN}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    message: "Update data",
+                    content: btoa(JSON.stringify(newData, null, 2)),
+                    sha: fileSHA
+                })
+            });
+            if(res.ok) {
+                document.getElementById('modal').style.display='none';
+                document.getElementById('saveBtn').innerText = "সেভ করুন";
+                loadData();
+            }
+        }
+
+        // এন্ট্রি যোগ করা
+        document.getElementById('entryForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`, {
+                headers: { Authorization: `token ${GITHUB_TOKEN}` }
+            });
+            const file = await res.json();
+            const currentData = JSON.parse(atob(file.content));
+
+            const newEntry = {
+                name: document.getElementById('p_name').value,
+                qty: document.getElementById('p_qty').value,
+                price: document.getElementById('p_price').value,
+                type: document.getElementById('p_type').value
+            };
+
+            currentData.push(newEntry);
+            updateGitHub(currentData);
+        };
+
+        // ডিলিট করা
+        async function deleteEntry(index) {
+            if(!confirm("মুছতে চান?")) return;
+            const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`, {
+                headers: { Authorization: `token ${GITHUB_TOKEN}` }
+            });
+            const file = await res.json();
+            const currentData = JSON.parse(atob(file.content));
+            currentData.splice(index, 1);
+            updateGitHub(currentData);
+        }
+
+        loadData();
+    </script>
+</body>
+</html>
