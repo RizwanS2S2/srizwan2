@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Niaz Fashion - Live Cloud</title>
+    <title>Niaz Fashion - Cloud Sync</title>
     <link href="https://fonts.maateen.me/solaiman-lipi/font.css" rel="stylesheet">
     <style>
         body { font-family: 'SolaimanLipi', sans-serif; background: #f4f7f6; margin: 0; padding: 15px; padding-bottom: 120px; }
@@ -19,7 +19,7 @@
         input, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; font-family: 'SolaimanLipi'; }
         .btn-save { background: #2ecc71; color: white; border: none; padding: 14px; width: 100%; border-radius: 8px; cursor: pointer; font-size: 18px; }
         #honor-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: #2c3e50; color: white; padding: 18px; text-align: center; font-size: 20px; font-weight: bold; border-top: 3px solid #3498db; }
-        .status { font-size: 12px; color: #7f8c8d; margin-bottom: 10px; }
+        .status { font-size: 11px; color: #7f8c8d; text-align: center; margin-bottom: 10px; }
     </style>
 </head>
 <body>
@@ -27,10 +27,10 @@
     <div class="header">
         <h1>Niaz Fashion</h1>
         <div class="date-display" id="date"></div>
-        <button onclick="clearAllData()" style="color:#e74c3c; background:none; border:none; cursor:pointer; font-weight:bold; margin-top:10px;">সব ডিলিট করুন</button>
+        <button onclick="clearData()" style="color:#e74c3c; background:none; border:none; cursor:pointer; font-weight:bold; font-size:12px; margin-top:10px;">সব ডাটা মুছুন</button>
     </div>
 
-    <div id="status-msg" class="status" style="text-align:center;">ডাটা সিঙ্ক হচ্ছে...</div>
+    <div id="sync-status" class="status">ডাটা লোড হচ্ছে...</div>
     <div id="data-list"></div>
 
     <div id="honor-bar">আজকের সম্মানী: <span id="total-val">0</span> টাকা</div>
@@ -45,8 +45,8 @@
                 <input type="number" id="p_qty" placeholder="সংখ্যা" required>
                 <input type="number" id="p_price" placeholder="দাম" required>
                 <select id="p_type">
-                    <option value="in">In (আয়)</option>
-                    <option value="out">Out (ব্যয়)</option>
+                    <option value="in">In (আয়)</option>
+                    <option value="out">Out (ব্যয়)</option>
                 </select>
                 <button type="submit" class="btn-save" id="saveBtn">সেভ করুন</button>
                 <button type="button" onclick="document.getElementById('modal').style.display='none'" style="width:100%; margin-top:10px; background:none; border:none; color:gray; cursor:pointer;">বাতিল</button>
@@ -56,33 +56,23 @@
 
     <script>
         const CONFIG = {
-            token: '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',
+            token: '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', 
             owner: 'RizwanS2S2',
             repo: 'srizwan2',
             file: 'data.json'
         };
 
-        let currentSHA = "";
-
         document.getElementById('date').innerText = "তারিখ: " + new Date().toLocaleDateString('en-GB');
 
-        // ১. গিটহাব থেকে ডাটা নিয়ে আসা
-        async function fetchData() {
-            try {
-                const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.file}`, {
-                    headers: { Authorization: `token ${CONFIG.token}`, 'Cache-Control': 'no-cache' }
-                });
-                const data = await res.json();
-                currentSHA = data.sha;
-                const content = JSON.parse(atob(data.content));
-                render(content);
-                document.getElementById('status-msg').innerText = "ক্লাউড সিঙ্ক সম্পন্ন";
-            } catch (e) {
-                document.getElementById('status-msg').innerText = "ডাটা লোড করতে সমস্যা হয়েছে!";
-            }
+        async function getGitHubData() {
+            const url = `https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.file}?t=${Date.now()}`;
+            const res = await fetch(url, {
+                headers: { 'Authorization': `token ${CONFIG.token}` }
+            });
+            if (!res.ok) throw new Error("Sync Failed");
+            return await res.json();
         }
 
-        // ২. ডাটা দেখানো
         function render(items) {
             let html = '';
             let total = 0;
@@ -100,66 +90,93 @@
             document.getElementById('total-val').innerText = total;
         }
 
-        // ৩. গিটহাবে সেভ করা
-        async function saveToGitHub(newData) {
-            document.getElementById('saveBtn').innerText = "প্রসেসিং...";
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.file}`, {
-                method: "PUT",
-                headers: { Authorization: `token ${CONFIG.token}` },
-                body: JSON.stringify({
-                    message: "Update from Web App",
-                    content: btoa(unescape(encodeURIComponent(JSON.stringify(newData, null, 2)))),
-                    sha: currentSHA
-                })
-            });
-
-            if(res.ok) {
-                document.getElementById('modal').style.display = 'none';
-                document.getElementById('saveBtn').innerText = "সেভ করুন";
-                fetchData();
-            } else {
-                alert("সেভ করতে সমস্যা হয়েছে! আবার চেষ্টা করুন।");
-                document.getElementById('saveBtn').innerText = "সেভ করুন";
+        async function init() {
+            try {
+                const data = await getGitHubData();
+                render(JSON.parse(decodeURIComponent(escape(atob(data.content)))));
+                document.getElementById('sync-status').innerText = "ক্লাউড সিঙ্ক সম্পন্ন";
+            } catch (e) {
+                document.getElementById('sync-status').innerText = "এরর: টোকেন বা ফাইল সমস্যা!";
             }
         }
 
-        // ফর্ম সাবমিট
         document.getElementById('entryForm').onsubmit = async (e) => {
             e.preventDefault();
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.file}`, {
-                headers: { Authorization: `token ${CONFIG.token}`, 'Cache-Control': 'no-cache' }
-            });
-            const fileData = await res.json();
-            const list = JSON.parse(atob(fileData.content));
+            const btn = document.getElementById('saveBtn');
+            btn.innerText = "সেভিং...";
+            btn.disabled = true;
 
-            list.push({
-                name: document.getElementById('p_name').value,
-                qty: document.getElementById('p_qty').value,
-                price: document.getElementById('p_price').value,
-                type: document.getElementById('p_type').value
-            });
+            try {
+                const latest = await getGitHubData();
+                const list = JSON.parse(decodeURIComponent(escape(atob(latest.content))));
+                
+                list.push({
+                    name: document.getElementById('p_name').value,
+                    qty: document.getElementById('p_qty').value,
+                    price: document.getElementById('p_price').value,
+                    type: document.getElementById('p_type').value
+                });
 
-            saveToGitHub(list);
+                const updateRes = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.file}`, {
+                    method: "PUT",
+                    headers: { 'Authorization': `token ${CONFIG.token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: "web update",
+                        content: btoa(unescape(encodeURIComponent(JSON.stringify(list)))),
+                        sha: latest.sha
+                    })
+                });
+
+                if(updateRes.ok) {
+                    document.getElementById('modal').style.display = 'none';
+                    document.getElementById('entryForm').reset();
+                    init();
+                } else { alert("Update failed!"); }
+            } catch (err) { alert("Error connecting to GitHub!"); }
+            
+            btn.innerText = "সেভ করুন";
+            btn.disabled = false;
         };
 
-        // ডিলিট ফাংশন
         async function deleteItem(index) {
-            if(!confirm("মুছে ফেলবেন?")) return;
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.file}`, {
-                headers: { Authorization: `token ${CONFIG.token}`, 'Cache-Control': 'no-cache' }
-            });
-            const fileData = await res.json();
-            const list = JSON.parse(atob(fileData.content));
-            list.splice(index, 1);
-            saveToGitHub(list);
+            if(!confirm("মুছতে চান?")) return;
+            try {
+                const latest = await getGitHubData();
+                const list = JSON.parse(decodeURIComponent(escape(atob(latest.content))));
+                list.splice(index, 1);
+                
+                await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.file}`, {
+                    method: "PUT",
+                    headers: { 'Authorization': `token ${CONFIG.token}` },
+                    body: JSON.stringify({
+                        message: "delete item",
+                        content: btoa(unescape(encodeURIComponent(JSON.stringify(list)))),
+                        sha: latest.sha
+                    })
+                });
+                init();
+            } catch (e) { alert("Delete failed!"); }
         }
 
-        // সব ডিলিট
-        function clearAllData() {
-            if(confirm("সব ডাটা মুছে যাবে!")) saveToGitHub([]);
+        async function clearData() {
+            if(confirm("সব ডাটা মুছে যাবে! নিশ্চিত?")) {
+                try {
+                    const latest = await getGitHubData();
+                    await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.file}`, {
+                        method: "PUT",
+                        headers: { 'Authorization': `token ${CONFIG.token}` },
+                        body: JSON.stringify({
+                            message: "clear all",
+                            content: btoa("[]"),
+                            sha: latest.sha
+                        })
+                    });
+                    init();
+                } catch (e) { alert("Clear failed!"); }
+            }
         }
 
-        fetchData();
+        init();
     </script>
 </body>
 </html>
